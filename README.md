@@ -1,19 +1,5 @@
-# Stage 1: Build
-FROM python:3.9-slim
+# VPP Asset Controller
 
-WORKDIR /app
+![CI/CD Pipeline](https://github.com/paulnaeem/simpleapp/actions/workflows/pipeline.yml/badge.svg)
 
-# Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application code
-COPY app/ ./app/
-
-# Set environment variables
-ENV FLASK_APP=app/main.py
-
-EXPOSE 5000
-
-# Start the application
-CMD ["python", "app/main.py"]
+This is a production-grade CI/CD pipeline for a Virtual Power Plant (VPP) asset controller.
