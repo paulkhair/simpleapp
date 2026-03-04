@@ -1,0 +1,67 @@
+name: Docker Hub CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # STAGE 1: Code Quality & Testing
+  test-and-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install flake8 pytest
+
+      - name: Run Lint (Static Analysis)
+        run: flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Run Unit Tests
+        run: pytest app/test_main.py
+
+  # STAGE 2: DevSecOps (Security Scan)
+  security-scan:
+    needs: test-and-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan Filesystem for Vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '1' # Blocks the build if High/Critical risks exist
+
+  # STAGE 3: Build & Push to Docker Hub
+  build-and-push:
+    needs: security-scan
+    # Only push to Docker Hub when merging into 'main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            paulnaeem/vpp-demo:latest
+            paulnaeem/vpp-demo:${{ github.sha }}
