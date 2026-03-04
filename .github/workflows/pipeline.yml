@@ -1,4 +1,4 @@
-name: Docker Hub CI/CD Pipeline
+name: VPP Production Pipeline
 
 on:
   push:
@@ -7,8 +7,8 @@ on:
     branches: [ "main" ]
 
 jobs:
-  # STAGE 1: Code Quality & Testing
-  test-and-lint:
+  # STAGE 1 & 2: LINT & TEST
+  quality-gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -23,29 +23,31 @@ jobs:
           pip install -r requirements.txt
           pip install flake8 pytest
 
-      - name: Run Lint (Static Analysis)
+      - name: Linting (Code Quality)
         run: flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
 
-      - name: Run Unit Tests
+      - name: Unit Tests (Reliability)
+        # We set PYTHONPATH to . so 'from app.main' works correctly
+        env:
+          PYTHONPATH: .
         run: pytest app/test_main.py
 
-  # STAGE 2: DevSecOps (Security Scan)
+  # STAGE 3: SECURITY SCAN
   security-scan:
-    needs: test-and-lint
+    needs: quality-gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Scan Filesystem for Vulnerabilities
+      - name: Vulnerability Scan (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
           severity: 'CRITICAL,HIGH'
-          exit-code: '1' # Blocks the build if High/Critical risks exist
+          exit-code: '1' # Fails the build if vulnerabilities are found
 
-  # STAGE 3: Build & Push to Docker Hub
+  # STAGE 4 & 5: BUILD & PUSH
   build-and-push:
     needs: security-scan
-    # Only push to Docker Hub when merging into 'main'
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -57,7 +59,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and Push Docker Image
+      - name: Build and Push Image
         uses: docker/build-push-action@v5
         with:
           context: .
